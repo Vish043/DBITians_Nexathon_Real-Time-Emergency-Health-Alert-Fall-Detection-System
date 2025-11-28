@@ -40,3 +40,54 @@ api.interceptors.response.use(
 
 export const sendFallEvent = (payload) => api.post('/api/events', payload);
 
+export const verifyEmergencyEmail = async (email) => {
+  try {
+    const response = await api.get(`/api/auth/verify-email?email=${encodeURIComponent(email)}`);
+    return response.data;
+  } catch (error) {
+    console.error('[API] Error verifying email:', error);
+    throw error;
+  }
+};
+
+export const linkEmergencyContact = async (userId, emergencyEmail) => {
+  try {
+    console.log('[API] Linking emergency contact:', { userId, emergencyEmail });
+    const response = await api.post('/api/emergency-links', {
+      userId,
+      emergencyContactEmail: emergencyEmail
+    });
+    console.log('[API] Link response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[API] Error linking emergency contact:', error);
+    console.error('[API] Error response:', error.response?.data);
+    console.error('[API] Error status:', error.response?.status);
+    console.error('[API] Error message:', error.message);
+    throw error;
+  }
+};
+
+export const saveUserProfile = async (userId, userName) => {
+  try {
+    const response = await api.post('/api/users/profile', {
+      userId,
+      userName
+    });
+    return response.data;
+  } catch (error) {
+    console.error('[API] Error saving user profile:', error);
+    throw error;
+  }
+};
+
+export const getUserProfile = async (userId) => {
+  try {
+    const response = await api.get(`/api/users/profile/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error('[API] Error fetching user profile:', error);
+    throw error;
+  }
+};
+

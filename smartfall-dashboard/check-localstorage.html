@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check SmartFall localStorage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .danger {
+            background: #dc3545;
+        }
+        .danger:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <h1>SmartFall localStorage Inspector</h1>
+    
+    <div>
+        <button onclick="checkStorage()">Check localStorage</button>
+        <button onclick="clearStorage()" class="danger">Clear All Events</button>
+    </div>
+    
+    <div id="output"></div>
+    
+    <script>
+        function checkStorage() {
+            const events = localStorage.getItem('smartfall_events');
+            const token = localStorage.getItem('firebase_id_token');
+            
+            let output = '<h2>localStorage Contents:</h2>';
+            
+            // Events
+            if (events) {
+                try {
+                    const parsed = JSON.parse(events);
+                    output += `<h3>Events (${parsed.length} total)</h3>`;
+                    output += `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+                    
+                    if (parsed.length > 0) {
+                        output += `<h4>Event Summary:</h4>`;
+                        output += `<ul>`;
+                        parsed.forEach((event, idx) => {
+                            output += `<li>Event ${idx + 1}: userId="${event.userId}", type="${event.type}", timestamp="${event.timestamp}"</li>`;
+                        });
+                        output += `</ul>`;
+                    }
+                } catch (e) {
+                    output += `<p style="color: red;">Error parsing events: ${e.message}</p>`;
+                    output += `<pre>${events}</pre>`;
+                }
+            } else {
+                output += `<p style="color: orange;">⚠️ No events in localStorage</p>`;
+            }
+            
+            // Token
+            output += `<h3>Firebase Token:</h3>`;
+            if (token) {
+                output += `<p>Token exists (${token.length} characters)</p>`;
+                output += `<p style="font-size: 10px; word-break: break-all;">${token.substring(0, 50)}...</p>`;
+            } else {
+                output += `<p style="color: orange;">⚠️ No token in localStorage</p>`;
+            }
+            
+            document.getElementById('output').innerHTML = output;
+        }
+        
+        function clearStorage() {
+            if (confirm('Are you sure you want to clear all events from localStorage? This cannot be undone!')) {
+                localStorage.removeItem('smartfall_events');
+                alert('Events cleared from localStorage!');
+                checkStorage();
+            }
+        }
+        
+        // Auto-check on load
+        window.onload = checkStorage;
+    </script>
+</body>
+</html>
+

@@ -115,6 +115,7 @@ function App() {
         visible={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         onSave={updateUserProfile}
+        userId={userProfile.userId || "demo-user-1"} // Use stored userId if available
       />
     </SafeAreaView>
   );

@@ -25,7 +25,28 @@ const PRESSURE_CHANGE_PER_METER = 0.12; // hPa per meter (approximate)
 
 const STORAGE_KEYS = {
   USER_NAME: '@smartfall:userName',
-  EMERGENCY_EMAIL: '@smartfall:emergencyEmail'
+  EMERGENCY_EMAIL: '@smartfall:emergencyEmail',
+  USER_ID: '@smartfall:userId' // Store generated userId
+};
+
+/**
+ * Generate a userId from userName
+ * Normalizes the name: lowercase, replace spaces with hyphens, remove special chars
+ */
+const generateUserIdFromName = (userName) => {
+  if (!userName || !userName.trim()) {
+    return DEMO_USER_ID; // Fallback to demo-user-1 if no name
+  }
+  
+  // Normalize: lowercase, replace spaces/special chars with hyphens, remove multiple hyphens
+  const normalized = userName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphen
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+  
+  return normalized || DEMO_USER_ID; // Fallback if result is empty
 };
 
 export const CLASSIFICATIONS = {
@@ -50,7 +71,7 @@ export const useFallDetector = () => {
     variance: 0,
     stillness: false
   });
-  const [userProfile, setUserProfile] = useState({ userName: '', emergencyEmail: '' });
+  const [userProfile, setUserProfile] = useState({ userName: '', emergencyEmail: '', userId: '' });
   const [severity, setSeverity] = useState(null);
 
   const magnitudeWindowRef = useRef([]);
@@ -76,13 +97,29 @@ export const useFallDetector = () => {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const [userName, emergencyEmail] = await Promise.all([
+        const [userName, emergencyEmail, storedUserId] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.USER_NAME),
-          AsyncStorage.getItem(STORAGE_KEYS.EMERGENCY_EMAIL)
+          AsyncStorage.getItem(STORAGE_KEYS.EMERGENCY_EMAIL),
+          AsyncStorage.getItem(STORAGE_KEYS.USER_ID)
         ]);
+        
+        // Generate userId from name if not stored, or if name changed
+        let userId = storedUserId || '';
+        if (userName && userName.trim()) {
+          const generatedUserId = generateUserIdFromName(userName);
+          if (!storedUserId || generatedUserId !== storedUserId) {
+            userId = generatedUserId;
+            await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, userId);
+            console.log('[Hook] Generated and stored userId:', userId, 'from name:', userName);
+          }
+        } else if (!storedUserId) {
+          userId = DEMO_USER_ID;
+        }
+        
         const profile = {
           userName: userName || '',
-          emergencyEmail: emergencyEmail || ''
+          emergencyEmail: emergencyEmail || '',
+          userId: userId
         };
         console.log('[Hook] Loaded user profile:', profile);
         setUserProfile(profile);
@@ -319,9 +356,31 @@ export const useFallDetector = () => {
       }
 
       const timestamp = new Date().toISOString();
-      const userId = currentProfile.userName || DEMO_USER_ID;
+      
+      // Generate userId from userName (or use stored userId)
+      let userId;
+      try {
+        const storedUserId = await AsyncStorage.getItem(STORAGE_KEYS.USER_ID);
+        if (storedUserId) {
+          userId = storedUserId;
+          console.log('[Hook] Using stored userId:', userId);
+        } else if (currentProfile.userName && currentProfile.userName.trim()) {
+          // Generate userId from name
+          userId = generateUserIdFromName(currentProfile.userName);
+          // Store it for future use
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, userId);
+          console.log('[Hook] Generated and stored userId:', userId, 'from name:', currentProfile.userName);
+        } else {
+          userId = DEMO_USER_ID;
+          console.log('[Hook] No name provided, using default userId:', userId);
+        }
+      } catch (err) {
+        console.error('[Hook] Error getting userId, using default:', err);
+        userId = currentProfile.userName ? generateUserIdFromName(currentProfile.userName) : DEMO_USER_ID;
+      }
       
       console.log('[Hook] Using profile for sending:', currentProfile);
+      console.log('[Hook] Using userId:', userId, '(userName:', currentProfile.userName, ')');
       
       // Calculate severity before sending
       const severityData = calculateSeverity();
