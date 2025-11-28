@@ -3,7 +3,14 @@ import './StatisticsCards.css';
 export default function StatisticsCards({ events }) {
   const stats = {
     total: events.length,
-    highSeverity: events.filter(e => e.severity?.level === 'HIGH').length,
+    highSeverity: events.filter(e => {
+      const severity = typeof e.severity === 'string' ? { level: e.severity } : (e.severity || { level: 'UNKNOWN' });
+      return severity.level === 'HIGH';
+    }).length,
+    mediumSeverity: events.filter(e => {
+      const severity = typeof e.severity === 'string' ? { level: e.severity } : (e.severity || { level: 'UNKNOWN' });
+      return severity.level === 'MEDIUM';
+    }).length,
     today: events.filter(e => {
       const eventDate = new Date(e.timestamp || e.time);
       const today = new Date();
@@ -11,8 +18,10 @@ export default function StatisticsCards({ events }) {
     }).length,
     uniqueUsers: new Set(events.map(e => e.userId || e.userName)).size,
     open: events.filter(e => e.status === 'OPEN').length,
-    mediumSeverity: events.filter(e => e.severity?.level === 'MEDIUM').length,
-    lowSeverity: events.filter(e => e.severity?.level === 'LOW').length
+    lowSeverity: events.filter(e => {
+      const severity = typeof e.severity === 'string' ? { level: e.severity } : (e.severity || { level: 'UNKNOWN' });
+      return severity.level === 'LOW';
+    }).length
   };
 
   const cards = [
@@ -29,6 +38,13 @@ export default function StatisticsCards({ events }) {
       icon: '🔴',
       color: '#dc2626',
       bg: '#fee2e2'
+    },
+    {
+      title: 'Medium Severity',
+      value: stats.mediumSeverity,
+      icon: '🟡',
+      color: '#d97706',
+      bg: '#fef3c7'
     },
     {
       title: 'Today',
@@ -49,13 +65,6 @@ export default function StatisticsCards({ events }) {
       value: stats.open,
       icon: '⚠️',
       color: '#f59e0b',
-      bg: '#fef3c7'
-    },
-    {
-      title: 'Medium Severity',
-      value: stats.mediumSeverity,
-      icon: '🟡',
-      color: '#d97706',
       bg: '#fef3c7'
     }
   ];

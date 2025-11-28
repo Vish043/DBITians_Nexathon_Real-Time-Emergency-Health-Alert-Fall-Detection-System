@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
         id: doc.id,
         userId: data.userId,
         userName: data.userName,
+        emergencyEmail: data.emergencyEmail, // Include emergencyEmail in response
         type: data.type,
         timestamp: data.timestamp,
         status: data.status,

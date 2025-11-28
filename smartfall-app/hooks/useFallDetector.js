@@ -30,23 +30,16 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Generate a userId from userName
- * Normalizes the name: lowercase, replace spaces with hyphens, remove special chars
+ * Generate a userId from emergencyEmail
+ * Uses the emergency contact's email as the userId for privacy and isolation
  */
-const generateUserIdFromName = (userName) => {
-  if (!userName || !userName.trim()) {
-    return DEMO_USER_ID; // Fallback to demo-user-1 if no name
+const generateUserIdFromEmail = (emergencyEmail) => {
+  if (!emergencyEmail || !emergencyEmail.trim()) {
+    return DEMO_USER_ID; // Fallback to demo-user-1 if no email
   }
   
-  // Normalize: lowercase, replace spaces/special chars with hyphens, remove multiple hyphens
-  const normalized = userName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphen
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-  
-  return normalized || DEMO_USER_ID; // Fallback if result is empty
+  // Normalize email: lowercase, trim
+  return emergencyEmail.trim().toLowerCase();
 };
 
 export const CLASSIFICATIONS = {
@@ -103,14 +96,14 @@ export const useFallDetector = () => {
           AsyncStorage.getItem(STORAGE_KEYS.USER_ID)
         ]);
         
-        // Generate userId from name if not stored, or if name changed
+        // Generate userId from emergencyEmail (not name) for privacy
         let userId = storedUserId || '';
-        if (userName && userName.trim()) {
-          const generatedUserId = generateUserIdFromName(userName);
+        if (emergencyEmail && emergencyEmail.trim()) {
+          const generatedUserId = generateUserIdFromEmail(emergencyEmail);
           if (!storedUserId || generatedUserId !== storedUserId) {
             userId = generatedUserId;
             await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-            console.log('[Hook] Generated and stored userId:', userId, 'from name:', userName);
+            console.log('[Hook] Generated and stored userId:', userId, 'from emergency email:', emergencyEmail);
           }
         } else if (!storedUserId) {
           userId = DEMO_USER_ID;

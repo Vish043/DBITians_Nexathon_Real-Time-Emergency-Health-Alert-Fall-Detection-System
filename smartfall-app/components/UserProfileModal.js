@@ -10,28 +10,21 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Generate a userId from userName
- * Normalizes the name: lowercase, replace spaces with hyphens, remove special chars
+ * Generate a userId from emergencyEmail
+ * Uses the emergency contact's email as the userId for privacy and isolation
  */
-const generateUserIdFromName = (userName) => {
-  console.log('[Modal] generateUserIdFromName called with:', userName);
+const generateUserIdFromEmail = (emergencyEmail) => {
+  console.log('[Modal] generateUserIdFromEmail called with:', emergencyEmail);
   
-  if (!userName || !userName.trim()) {
-    console.log('[Modal] No name provided, returning default userId');
+  if (!emergencyEmail || !emergencyEmail.trim()) {
+    console.log('[Modal] No email provided, returning default userId');
     return 'demo-user-1'; // Fallback
   }
   
-  // Normalize: lowercase, replace spaces/special chars with hyphens, remove multiple hyphens
-  const normalized = userName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphen
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
-  
-  const result = normalized || 'demo-user-1'; // Fallback if result is empty
-  console.log('[Modal] Generated userId:', result, 'from name:', userName);
-  return result;
+  // Normalize email: lowercase, trim
+  const normalized = emergencyEmail.trim().toLowerCase();
+  console.log('[Modal] Generated userId from email:', normalized);
+  return normalized;
 };
 
 export default function UserProfileModal({ visible, onClose, onSave, userId = 'demo-user-1' }) {
@@ -102,36 +95,33 @@ export default function UserProfileModal({ visible, onClose, onSave, userId = 'd
         return;
       }
 
-      // Generate userId from name (or use existing stored userId)
+      // Generate userId from emergencyEmail (not name)
+      // This ensures each emergency contact has their own isolated events
       let currentUserId;
       try {
         const storedUserId = await AsyncStorage.getItem(STORAGE_KEYS.USER_ID);
-        if (storedUserId && trimmedName) {
-          // If name changed, regenerate userId
-          const newUserId = generateUserIdFromName(trimmedName);
-          if (newUserId !== storedUserId) {
-            console.log('[Modal] Name changed, updating userId:', storedUserId, '→', newUserId);
-            currentUserId = newUserId;
-            await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, newUserId);
-          } else {
-            currentUserId = storedUserId;
-          }
-        } else if (trimmedName) {
-          // Generate new userId from name
-          console.log('[Modal] No stored userId found, generating from name:', trimmedName);
-          currentUserId = generateUserIdFromName(trimmedName);
-          await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, currentUserId);
-          console.log('[Modal] ✅ Generated and stored userId:', currentUserId, 'from name:', trimmedName);
+        // Always generate userId from emergencyEmail for consistency
+        const newUserId = generateUserIdFromEmail(trimmedEmail);
+        
+        if (storedUserId && storedUserId !== newUserId) {
+          console.log('[Modal] Emergency email changed, updating userId:', storedUserId, '→', newUserId);
+          currentUserId = newUserId;
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, newUserId);
+        } else if (!storedUserId) {
+          // Generate new userId from emergency email
+          console.log('[Modal] No stored userId found, generating from emergency email:', trimmedEmail);
+          currentUserId = newUserId;
+          await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, newUserId);
+          console.log('[Modal] ✅ Generated and stored userId:', currentUserId, 'from emergency email:', trimmedEmail);
         } else {
-          // No name provided, use prop userId or default
-          currentUserId = userId || 'demo-user-1';
+          currentUserId = storedUserId;
         }
       } catch (err) {
         console.error('[Modal] Error managing userId:', err);
-        currentUserId = trimmedName ? generateUserIdFromName(trimmedName) : (userId || 'demo-user-1');
+        currentUserId = generateUserIdFromEmail(trimmedEmail);
       }
 
-      console.log('[Modal] Using userId:', currentUserId, 'for name:', trimmedName);
+      console.log('[Modal] Using userId:', currentUserId, '(from emergency email:', trimmedEmail, ')');
 
       // Verify email exists before saving
       setSaving(true);

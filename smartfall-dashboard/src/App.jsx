@@ -178,7 +178,10 @@ export default function App() {
         timestamp: event.timestamp,
         location,
         mapsUrl,
-        severity: event.severity || { level: 'UNKNOWN' },
+        // Handle severity: can be a string ("LOW", "MEDIUM", "HIGH") or an object with level property
+        severity: typeof event.severity === 'string' 
+          ? { level: event.severity } 
+          : (event.severity || { level: 'UNKNOWN' }),
         severityScore: event.severityScore || null,
         severityMetrics: event.severityMetrics || null
       };
@@ -301,7 +304,7 @@ export default function App() {
     <div className="app-shell">
       <div className="card">
         <div className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1>SmartFall Alerts</h1>
             <p>Live feed of fall detections for your linked users.</p>
             {user.email && (

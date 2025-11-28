@@ -22,15 +22,26 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     const emergencyContactEmail = req.user.email;
+    const normalizedQueryEmail = emergencyContactEmail.toLowerCase().trim();
     console.log('========================================');
     console.log('[Events] GET request from:', emergencyContactEmail);
     console.log('[Events] User UID:', req.user.uid);
+    console.log('[Events] Querying events where userId = emergencyEmail:', normalizedQueryEmail);
     console.log('========================================');
 
-    // Get all user IDs that this emergency contact has access to
+    // NEW APPROACH: Use emergencyEmail as userId
+    // Each emergency contact has their own userId (their email)
+    // Events are stored with userId = emergencyEmail
+    // So we query events where userId = logged-in email
+    
+    // Still verify the link exists for security
     const accessibleUserIds = await getAccessibleUserIds(emergencyContactEmail);
-    console.log('[Events] Accessible user IDs:', accessibleUserIds);
+    console.log('[Events] Accessible user IDs (from links):', accessibleUserIds);
     console.log('[Events] Number of accessible users:', accessibleUserIds.length);
+    
+    // Use the logged-in email as the userId to query
+    const userIdsToQuery = [normalizedQueryEmail];
+    console.log('[Events] Querying events for userId (emergencyEmail):', userIdsToQuery);
 
     if (accessibleUserIds.length === 0) {
       // No linked users yet
@@ -82,25 +93,19 @@ router.get('/', verifyToken, async (req, res) => {
       });
     }
 
-    // Firestore 'in' query requires at least 1 item and max 10 items
-    const userIdsToQuery = accessibleUserIds.length > 10 ? accessibleUserIds.slice(0, 10) : accessibleUserIds;
-    const normalizedQueryEmail = emergencyContactEmail.toLowerCase().trim();
-    console.log('[Events] Querying events for user IDs:', userIdsToQuery);
-    console.log('[Events] Expected userId format: "demo-user-1" (or whatever was used when linking)');
-    console.log('[Events] Filtering by emergency contact email:', normalizedQueryEmail);
-    console.log('[Events] Privacy: Only showing events where emergencyEmail matches this contact');
+    // NEW APPROACH: userId = emergencyEmail
+    // Query events where userId matches the logged-in emergency contact's email
+    console.log('[Events] Querying events where userId = emergencyEmail:', normalizedQueryEmail);
+    console.log('[Events] Privacy: Each emergency contact only sees events stored with their email as userId');
 
-    // Fetch events only for accessible users AND only for events where this emergency contact was alerted
-    // This ensures privacy: each emergency contact only sees events where they were specifically alerted
     // Note: Firestore requires a composite index when using where + orderBy on different fields
     // If you get an index error, create the index in Firestore Console
     let snapshot;
     try {
-      // Try with orderBy first - filter by both userId AND emergencyEmail
+      // Query events where userId = emergencyEmail (the logged-in contact's email)
       snapshot = await firestore
         .collection('events')
-        .where('userId', 'in', userIdsToQuery)
-        .where('emergencyEmail', '==', emergencyContactEmail.toLowerCase().trim())
+        .where('userId', '==', normalizedQueryEmail)
         .orderBy('timestamp', 'desc')
         .limit(200) // Increased limit to store more past events
         .get();
@@ -116,20 +121,19 @@ router.get('/', verifyToken, async (req, res) => {
       
       if (isIndexError) {
         console.log('[Events] Index error detected, trying query without orderBy...');
-        console.log('[Events] Querying for userIds:', userIdsToQuery);
+        console.log('[Events] Querying for userId:', normalizedQueryEmail);
         try {
-          // Query without orderBy, then sort in memory - filter by both userId AND emergencyEmail
+          // Query without orderBy, then sort in memory - userId = emergencyEmail
           const fallbackSnapshot = await firestore
             .collection('events')
-            .where('userId', 'in', userIdsToQuery)
-            .where('emergencyEmail', '==', emergencyContactEmail.toLowerCase().trim())
+            .where('userId', '==', normalizedQueryEmail)
             .limit(200) // Increased limit to store more past events
             .get();
           
           console.log('[Events] ✅ Fallback query successful! Got', fallbackSnapshot.docs.length, 'events');
           
           if (fallbackSnapshot.docs.length === 0) {
-            console.log('[Events] ⚠️ No events found for userIds:', userIdsToQuery);
+            console.log('[Events] ⚠️ No events found for userId:', normalizedQueryEmail);
             console.log('[Events] Checking if events exist in Firestore...');
             // Debug: Check if any events exist at all
             const allEventsSnapshot = await firestore
@@ -143,28 +147,31 @@ router.get('/', verifyToken, async (req, res) => {
                 const data = doc.data();
                 console.log(`[Events] Event ${idx + 1}: userId="${data.userId}", timestamp="${data.timestamp}"`);
               });
-              console.log('[Events] Expected userIds to match:', userIdsToQuery);
-              console.log('[Events] Checking if userIds match...');
+              console.log('[Events] Expected userId to match:', normalizedQueryEmail);
+              console.log('[Events] Checking if event userIds match...');
               const matchingEvents = allEventsSnapshot.docs.filter(doc => {
                 const data = doc.data();
-                const matches = userIdsToQuery.includes(data.userId);
-                if (!matches) {
-                  console.log(`[Events]   ❌ Mismatch: Event userId="${data.userId}" not in query list`);
+                const userIdMatches = data.userId === normalizedQueryEmail;
+                if (!userIdMatches) {
+                  console.log(`[Events]   ❌ Mismatch: Event userId="${data.userId}" (expected: "${normalizedQueryEmail}")`);
+                } else {
+                  console.log(`[Events]   ✅ Match: Event userId="${data.userId}"`);
                 }
-                return matches;
+                return userIdMatches;
               });
               console.log('[Events] Matching events found:', matchingEvents.length);
               if (matchingEvents.length === 0) {
                 console.log('[Events] ⚠️ ISSUE: Events exist but userIds don\'t match!');
-                console.log('[Events] SOLUTION: Make sure mobile app uses userId="demo-user-1" when creating events');
-                console.log('[Events] SOLUTION: Make sure emergency link uses same userId="demo-user-1"');
+                console.log('[Events] SOLUTION: Make sure mobile app uses emergencyEmail as userId when creating events');
+                console.log('[Events] SOLUTION: Expected userId format: emergencyEmail (e.g., "adechoes01@gmail.com")');
               }
             } else {
               console.log('[Events] ⚠️ No events exist in Firestore at all. User needs to trigger a fall from mobile app.');
             }
           }
           
-          // Sort in memory
+          // NEW APPROACH: userId = emergencyEmail, so all events already match
+          // Just map and sort
           const eventsArray = fallbackSnapshot.docs.map((doc) => {
             const data = doc.data();
             return {
@@ -179,6 +186,7 @@ router.get('/', verifyToken, async (req, res) => {
             return timeB - timeA; // Descending
           });
           
+          console.log('[Events] ✅ Fallback query: Fetched', eventsArray.length, 'events where userId =', normalizedQueryEmail);
           console.log('[Events] ✅ Returning', eventsArray.length, 'sorted events to dashboard');
           
           // Return sorted events
@@ -186,8 +194,7 @@ router.get('/', verifyToken, async (req, res) => {
             success: true, 
             events: eventsArray.slice(0, 200), // Return up to 200 events
             accessibleUserCount: accessibleUserIds.length,
-            queriedUserIds: userIdsToQuery,
-            queriedUserId: userIdsToQuery[0], // Add first userId for easier debugging
+            queriedUserId: normalizedQueryEmail,
             note: 'Events sorted in memory (composite index recommended for better performance)'
           });
         } catch (fallbackError) {
@@ -212,99 +219,31 @@ router.get('/', verifyToken, async (req, res) => {
       throw queryError;
     }
 
-    // If more than 10 users, we need to do multiple queries (Firestore 'in' limit is 10)
-    // Filter events to ensure privacy: only show events where emergencyEmail matches
-    let events = snapshot.docs
-      .map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data
-        };
-      })
-      .filter((event) => {
-        // Only include events where emergencyEmail matches the logged-in contact
-        // Exclude events with null/missing emergencyEmail for privacy
-        const eventEmail = event.emergencyEmail?.toLowerCase().trim();
-        const matches = eventEmail === normalizedQueryEmail;
-        if (!matches && eventEmail) {
-          console.log(`[Events] Filtered out event ${event.id}: emergencyEmail="${event.emergencyEmail}" doesn't match "${normalizedQueryEmail}"`);
-        }
-        return matches;
-      });
+    // NEW APPROACH: userId = emergencyEmail, so all events from query already match
+    // No need for additional filtering since we query by userId = email
+    let events = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data
+      };
+    });
     
-    console.log('[Events] Fetched', snapshot.docs.length, 'events from query, filtered to', events.length, 'events matching emergencyEmail');
-
-    // Initialize remainingBatches outside the if block to avoid scope issues
-    let remainingBatches = [];
+    console.log('[Events] Fetched', events.length, 'events where userId =', normalizedQueryEmail);
     
-    if (accessibleUserIds.length > 10) {
-      // Fetch remaining users in batches
-      for (let i = 10; i < accessibleUserIds.length; i += 10) {
-        const batch = accessibleUserIds.slice(i, i + 10);
-        try {
-          // Filter by both userId AND emergencyEmail for privacy
-          const batchSnapshot = await firestore
-            .collection('events')
-            .where('userId', 'in', batch)
-            .where('emergencyEmail', '==', emergencyContactEmail.toLowerCase().trim())
-            .orderBy('timestamp', 'desc')
-            .limit(200) // Increased limit for past events
-            .get();
-          
-            // Filter batch events by emergencyEmail for privacy
-            const batchEvents = batchSnapshot.docs
-              .map((doc) => ({
-                id: doc.id,
-                ...doc.data()
-              }))
-              .filter((event) => {
-                const eventEmail = event.emergencyEmail?.toLowerCase().trim();
-                return eventEmail === normalizedQueryEmail;
-              });
-            remainingBatches.push(...batchEvents);
-        } catch (batchError) {
-          console.error('[Events] Error in batch query:', batchError);
-          // Try without orderBy for this batch
-          try {
-            // Filter by both userId AND emergencyEmail for privacy
-            const batchSnapshot = await firestore
-              .collection('events')
-              .where('userId', 'in', batch)
-              .where('emergencyEmail', '==', emergencyContactEmail.toLowerCase().trim())
-              .limit(200) // Increased limit for past events
-              .get();
-            
-            // Filter batch events by emergencyEmail for privacy
-            const batchEvents = batchSnapshot.docs
-              .map((doc) => ({
-                id: doc.id,
-                ...doc.data()
-              }))
-              .filter((event) => {
-                const eventEmail = event.emergencyEmail?.toLowerCase().trim();
-                return eventEmail === normalizedQueryEmail;
-              });
-            remainingBatches.push(...batchEvents);
-          } catch (fallbackBatchError) {
-            console.error('[Events] Fallback batch query also failed:', fallbackBatchError);
-            // Continue with what we have
-          }
-        }
-      }
-      
-      events = [...events, ...remainingBatches];
-      // Sort by timestamp descending
-      events.sort((a, b) => {
-        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return timeB - timeA; // Descending
-      });
-      events = events.slice(0, 200); // Limit to 200 total events
-    }
+    // NEW APPROACH: Since userId = emergencyEmail, no need for batch queries or filtering
+    // We're only querying for one userId (the logged-in email)
+    // Just sort the events by timestamp
+    events.sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA; // Descending
+    });
+    events = events.slice(0, 200); // Limit to 200 total events
 
     console.log('[Events] ========================================');
     console.log('[Events] Returning', events.length, 'events to dashboard');
+    console.log('[Events] Queried userId (emergencyEmail):', normalizedQueryEmail);
     if (events.length > 0) {
       console.log('[Events] Event user IDs:', events.map(e => e.userId));
       console.log('[Events] First event:', {
@@ -315,35 +254,21 @@ router.get('/', verifyToken, async (req, res) => {
       });
     } else {
       console.log('[Events] ⚠️ No events to return!');
-      console.log('[Events] Accessible user IDs:', accessibleUserIds);
-      console.log('[Events] Queried user IDs:', userIdsToQuery);
+      console.log('[Events] Queried userId:', normalizedQueryEmail);
       console.log('[Events] Check backend logs above for diagnosis');
+      console.log('[Events] Possible issues:');
+      console.log('[Events]   1. Events have different userId (should be emergencyEmail)');
+      console.log('[Events]   2. No events have been created yet');
+      console.log('[Events]   3. Mobile app needs to use emergencyEmail as userId when creating events');
     }
     console.log('[Events] ========================================');
     
-      console.log('[Events] ========================================');
-      console.log('[Events] Returning', events.length, 'events to dashboard');
-      if (events.length === 0) {
-        console.log('[Events] ⚠️ No events found!');
-        console.log('[Events] Queried userIds:', userIdsToQuery);
-        console.log('[Events] Check backend logs above for diagnosis');
-        console.log('[Events] Possible issues:');
-        console.log('[Events]   1. Events have different userId than link');
-        console.log('[Events]   2. No events have been created yet');
-        console.log('[Events]   3. Events were created before link was established');
-      } else {
-        console.log('[Events] ✅ Found events for userIds:', userIdsToQuery);
-        console.log('[Events] Event userIds:', events.map(e => e.userId));
-      }
-      console.log('[Events] ========================================');
-      
-      res.json({ 
-        success: true, 
-        events,
-        accessibleUserCount: accessibleUserIds.length,
-        queriedUserIds: userIdsToQuery,
-        queriedUserId: userIdsToQuery[0] // Add first userId for easier debugging
-      });
+    res.json({ 
+      success: true, 
+      events,
+      accessibleUserCount: accessibleUserIds.length,
+      queriedUserId: normalizedQueryEmail // userId = emergencyEmail
+    });
   } catch (err) {
     console.error('========================================');
     console.error('GET /api/events error');
@@ -393,12 +318,24 @@ router.post('/', async (req, res) => {
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
     }
+    
+    // Require emergencyEmail for privacy - events must specify which contact to alert
+    if (!emergencyEmail || !emergencyEmail.trim()) {
+      console.error('[Backend] ❌ Event creation rejected: emergencyEmail is required for privacy');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'emergencyEmail is required. Events must specify which emergency contact to alert.' 
+      });
+    }
 
     const eventTimestamp = timestamp ?? new Date().toISOString();
     const coords =
       location?.lat != null && location?.lng != null
         ? { lat: Number(location.lat), lng: Number(location.lng) }
         : null;
+    
+    // Normalize emergencyEmail to lowercase for consistent querying
+    const normalizedEmergencyEmail = emergencyEmail ? emergencyEmail.toLowerCase().trim() : null;
 
     // Update or create user profile if userName is provided
     if (userName && userName.trim()) {
@@ -422,8 +359,6 @@ router.post('/', async (req, res) => {
     }
 
     const id = nanoid();
-    // Normalize emergencyEmail to lowercase for consistent querying
-    const normalizedEmergencyEmail = emergencyEmail ? emergencyEmail.toLowerCase().trim() : null;
     
     const payload = {
       userId,
@@ -442,7 +377,8 @@ router.post('/', async (req, res) => {
     console.log('[Backend] Storing event with payload:', payload);
     console.log('[Backend] Event userId:', userId, '- This should match emergencyLinks userId');
     console.log('[Backend] Event userName:', userName || 'not provided');
-    console.log('[Backend] Event emergencyEmail:', emergencyEmail || 'not provided');
+    console.log('[Backend] Event emergencyEmail:', normalizedEmergencyEmail || 'ERROR: not provided');
+    console.log('[Backend] ⚠️ Privacy: This event will ONLY be visible to emergency contact:', normalizedEmergencyEmail);
     console.log('[Backend] ========================================');
 
     await firestore.collection('events').doc(id).set(payload);
