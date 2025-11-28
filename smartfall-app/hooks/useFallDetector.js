@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { subscribeSensors } from '../services/sensors';
 import { sendFallEvent } from '../services/api';
 
@@ -12,6 +13,11 @@ const STILLNESS_VAR_THRESHOLD = 0.05;
 const STILLNESS_GRAVITY_TOLERANCE = 0.25;
 const GYRO_THRESHOLD = 5;
 const DEMO_USER_ID = 'demo-user-1';
+
+const STORAGE_KEYS = {
+  USER_NAME: '@smartfall:userName',
+  EMERGENCY_EMAIL: '@smartfall:emergencyEmail'
+};
 
 export const CLASSIFICATIONS = {
   NORMAL: { label: 'NORMAL', color: '#22c55e' },
@@ -34,6 +40,7 @@ export const useFallDetector = () => {
     variance: 0,
     stillness: false
   });
+  const [userProfile, setUserProfile] = useState({ userName: '', emergencyEmail: '' });
 
   const magnitudeWindowRef = useRef([]);
   const confirmFallRef = useRef(null);
@@ -48,6 +55,27 @@ export const useFallDetector = () => {
     const { x, y, z } = rotation;
     return Math.sqrt(x * x + y * y + z * z);
   }, [rotation]);
+
+  // Load user profile on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const [userName, emergencyEmail] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.USER_NAME),
+          AsyncStorage.getItem(STORAGE_KEYS.EMERGENCY_EMAIL)
+        ]);
+        const profile = {
+          userName: userName || '',
+          emergencyEmail: emergencyEmail || ''
+        };
+        console.log('[Hook] Loaded user profile:', profile);
+        setUserProfile(profile);
+      } catch (err) {
+        console.error('Error loading profile:', err);
+      }
+    };
+    loadProfile();
+  }, []);
 
   useEffect(() => {
     console.log('useFallDetector: Initializing sensors...');
@@ -116,6 +144,24 @@ export const useFallDetector = () => {
     setStatus('Sending alert…');
     setError(null);
     try {
+      // Load fresh profile data from AsyncStorage right before sending
+      let currentProfile = { userName: '', emergencyEmail: '' };
+      try {
+        const [userName, emergencyEmail] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.USER_NAME),
+          AsyncStorage.getItem(STORAGE_KEYS.EMERGENCY_EMAIL)
+        ]);
+        currentProfile = {
+          userName: userName || '',
+          emergencyEmail: emergencyEmail || ''
+        };
+        console.log('[Hook] Loaded fresh profile from AsyncStorage:', currentProfile);
+      } catch (err) {
+        console.error('[Hook] Error loading profile from AsyncStorage:', err);
+        // Fall back to state
+        currentProfile = userProfile;
+      }
+
       let coords = null;
       const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
       if (locationStatus === 'granted') {
@@ -127,14 +173,29 @@ export const useFallDetector = () => {
       }
 
       const timestamp = new Date().toISOString();
-      console.log('Sending fall event to backend...', { userId: DEMO_USER_ID, type: 'FALL', location: coords });
+      const userId = currentProfile.userName || DEMO_USER_ID;
       
-      const response = await sendFallEvent({
-        userId: DEMO_USER_ID,
+      console.log('[Hook] Using profile for sending:', currentProfile);
+      
+      // Prepare payload - only include fields if they have values
+      const payload = {
+        userId,
         type: 'FALL',
         location: coords,
         timestamp
-      });
+      };
+      
+      // Only add userName and emergencyEmail if they exist and are not empty
+      if (currentProfile.userName && currentProfile.userName.trim()) {
+        payload.userName = currentProfile.userName.trim();
+      }
+      if (currentProfile.emergencyEmail && currentProfile.emergencyEmail.trim()) {
+        payload.emergencyEmail = currentProfile.emergencyEmail.trim();
+      }
+      
+      console.log('[Hook] Sending fall event to backend with payload:', JSON.stringify(payload, null, 2));
+      
+      const response = await sendFallEvent(payload);
 
       console.log('Backend response:', response.data);
 
@@ -187,9 +248,14 @@ export const useFallDetector = () => {
       1000
     );
     return () => clearTimeout(timer);
-  }, [countdown]);
+  }, [countdown, userProfile]);
 
   const classificationMeta = CLASSIFICATIONS[classification] || CLASSIFICATIONS.NORMAL;
+
+  const updateUserProfile = useCallback((profile) => {
+    console.log('[Hook] Updating user profile:', profile);
+    setUserProfile(profile);
+  }, []);
 
   return {
     rotation,
@@ -201,7 +267,9 @@ export const useFallDetector = () => {
     error,
     lastEvent,
     windowStats,
-    cancelAlert
+    cancelAlert,
+    userProfile,
+    updateUserProfile
   };
 };
 

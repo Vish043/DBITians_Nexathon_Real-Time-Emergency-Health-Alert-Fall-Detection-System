@@ -54,6 +54,7 @@ export default function App() {
         return {
           id: event.id,
           userId: event.userId,
+          userName: event.userName || null,
           status: event.status,
           type: event.type ?? 'unknown',
           time: new Date(event.timestamp).toLocaleString(),

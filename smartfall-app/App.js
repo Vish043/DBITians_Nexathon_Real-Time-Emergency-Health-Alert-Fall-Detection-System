@@ -1,12 +1,14 @@
 import { registerRootComponent } from 'expo';
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFallDetector } from './hooks/useFallDetector';
+import UserProfileModal from './components/UserProfileModal';
 
 console.log('SmartFall App mounting');
 
 function App() {
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const {
     rotation,
     fallScore,
@@ -16,14 +18,27 @@ function App() {
     status,
     error,
     lastEvent,
-    cancelAlert
+    cancelAlert,
+    userProfile,
+    updateUserProfile
   } = useFallDetector();
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       <View style={styles.card}>
-        <Text style={styles.title}>SmartFall Monitor</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>SmartFall Monitor</Text>
+          <TouchableOpacity 
+            style={styles.settingsButton} 
+            onPress={() => setShowProfileModal(true)}
+          >
+            <Text style={styles.settingsButtonText}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
+        {userProfile.userName && (
+          <Text style={styles.userName}>👤 {userProfile.userName}</Text>
+        )}
         <Text style={[styles.state, { color: classificationMeta.color }]}>
           {classificationMeta.label}
         </Text>
@@ -75,6 +90,12 @@ function App() {
           </View>
         </View>
       )}
+
+      <UserProfileModal
+        visible={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        onSave={updateUserProfile}
+      />
     </SafeAreaView>
   );
 }
@@ -97,12 +118,32 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center'
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12
+  },
   title: {
     fontSize: 28,
     color: '#fff',
     fontWeight: '700',
+    flex: 1,
+    textAlign: 'center'
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 8
+  },
+  settingsButtonText: {
+    fontSize: 24,
+    color: '#cbd5f5'
+  },
+  userName: {
+    fontSize: 16,
+    color: '#94a3b8',
     textAlign: 'center',
-    marginBottom: 12
+    marginBottom: 8
   },
   state: {
     fontSize: 20,

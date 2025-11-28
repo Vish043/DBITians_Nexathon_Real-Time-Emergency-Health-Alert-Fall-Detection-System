@@ -29,14 +29,20 @@ const transport =
       })
     : null;
 
-export const sendAlertEmail = async ({ userId, timestamp, location }) => {
+export const sendAlertEmail = async ({ userId, userName, emergencyEmail, timestamp, location }) => {
+  console.log('[Email] sendAlertEmail called with:', { userId, userName, emergencyEmail, timestamp });
+  
   const mapsUrl =
     location?.lat != null && location?.lng != null
       ? `https://maps.google.com/?q=${location.lat},${location.lng}`
       : null;
 
+  const displayName = userName || userId;
+  console.log('[Email] Display name:', displayName);
+
   const text = [
     '[SmartFall] Fall Alert Detected',
+    `User: ${displayName}`,
     `User ID: ${userId}`,
     `Timestamp: ${timestamp}`,
     mapsUrl ? `Location: ${mapsUrl}` : 'Location unavailable'
@@ -47,19 +53,26 @@ export const sendAlertEmail = async ({ userId, timestamp, location }) => {
     return;
   }
 
-  if (!env.emergencyContact) {
-    console.warn('[SmartFall] EMERGENCY_CONTACT not set in .env file. Cannot send email.');
+  // Use emergency email from event, or fall back to default from .env
+  const recipientEmail = emergencyEmail || env.emergencyContact;
+  console.log('[Email] Recipient email:', recipientEmail, '(from event:', emergencyEmail, '| from env:', env.emergencyContact, ')');
+
+  if (!recipientEmail) {
+    console.warn('[SmartFall] No emergency contact email available. Cannot send email.');
     return;
   }
 
   try {
-    const info = await transport.sendMail({
-      to: env.emergencyContact,
+    const mailOptions = {
+      to: recipientEmail,
       from: env.email.from,
-      subject: '[SmartFall] Fall Alert Detected',
+      subject: `[SmartFall] Fall Alert - ${displayName}`,
       text
-    });
-    console.log('[SmartFall] Email sent successfully to', env.emergencyContact, 'Message ID:', info.messageId);
+    };
+    console.log('[Email] Sending email with options:', { ...mailOptions, text: '[email body]' });
+    
+    const info = await transport.sendMail(mailOptions);
+    console.log('[SmartFall] Email sent successfully to', recipientEmail, 'Message ID:', info.messageId);
   } catch (err) {
     console.error('[SmartFall] Failed to send email:', err.message);
     console.error('[SmartFall] Error details:', err);

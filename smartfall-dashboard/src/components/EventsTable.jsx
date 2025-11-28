@@ -15,6 +15,7 @@ export default function EventsTable({ events, onDelete }) {
         <tr>
           <th>Time</th>
           <th>User</th>
+          <th>Name</th>
           <th>Type</th>
           <th>Status</th>
           <th>Location</th>
@@ -26,6 +27,7 @@ export default function EventsTable({ events, onDelete }) {
           <tr key={event.id}>
             <td>{event.time}</td>
             <td>{event.userId}</td>
+            <td>{event.userName || '—'}</td>
             <td>{event.type}</td>
             <td>
               <span className={`status-pill ${event.status}`}>{event.status}</span>

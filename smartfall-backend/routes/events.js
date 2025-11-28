@@ -27,7 +27,11 @@ router.get('/', async (_req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { userId, type = 'FALL', location, timestamp } = req.body ?? {};
+    console.log('[Backend] Full request body:', JSON.stringify(req.body, null, 2));
+    
+    const { userId, userName, emergencyEmail, type = 'FALL', location, timestamp } = req.body ?? {};
+
+    console.log('[Backend] Extracted values:', { userId, userName, emergencyEmail, type, hasLocation: !!location });
 
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
@@ -42,11 +46,15 @@ router.post('/', async (req, res) => {
     const id = nanoid();
     const payload = {
       userId,
+      userName: userName || null,
+      emergencyEmail: emergencyEmail || null,
       type,
       timestamp: eventTimestamp,
       location: coords,
       status: 'OPEN'
     };
+
+    console.log('[Backend] Storing event with payload:', payload);
 
     await firestore.collection('events').doc(id).set(payload);
 
@@ -54,8 +62,21 @@ router.post('/', async (req, res) => {
     res.status(201).json({ success: true, eventId: id });
 
     // Send email in background (non-blocking)
-    sendAlertEmail({ userId, timestamp: eventTimestamp, location: coords }).catch((err) =>
-      console.error('Failed to send email', err.message)
+    console.log('[Backend] Sending email with:', { 
+      userId, 
+      userName: userName || userId, 
+      emergencyEmail: emergencyEmail || 'using default',
+      timestamp: eventTimestamp 
+    });
+    
+    sendAlertEmail({ 
+      userId, 
+      userName: userName || userId,
+      emergencyEmail,
+      timestamp: eventTimestamp, 
+      location: coords 
+    }).catch((err) =>
+      console.error('[Backend] Failed to send email:', err.message)
     );
   } catch (err) {
     console.error('POST /api/events error', err);
