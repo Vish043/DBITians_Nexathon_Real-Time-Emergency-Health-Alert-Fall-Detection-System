@@ -59,7 +59,10 @@ export default function App() {
           type: event.type ?? 'unknown',
           time: new Date(event.timestamp).toLocaleString(),
           location,
-          mapsUrl
+          mapsUrl,
+          severity: event.severity || 'UNKNOWN',
+          severityScore: event.severityScore || null,
+          severityMetrics: event.severityMetrics || null
         };
       }),
     [events]

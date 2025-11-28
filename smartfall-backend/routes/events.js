@@ -29,9 +29,27 @@ router.post('/', async (req, res) => {
   try {
     console.log('[Backend] Full request body:', JSON.stringify(req.body, null, 2));
     
-    const { userId, userName, emergencyEmail, type = 'FALL', location, timestamp } = req.body ?? {};
+    const { 
+      userId, 
+      userName, 
+      emergencyEmail, 
+      type = 'FALL', 
+      location, 
+      timestamp,
+      severity,
+      severityScore,
+      severityMetrics
+    } = req.body ?? {};
 
-    console.log('[Backend] Extracted values:', { userId, userName, emergencyEmail, type, hasLocation: !!location });
+    console.log('[Backend] Extracted values:', { 
+      userId, 
+      userName, 
+      emergencyEmail, 
+      type, 
+      hasLocation: !!location,
+      severity,
+      severityScore
+    });
 
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
@@ -51,7 +69,10 @@ router.post('/', async (req, res) => {
       type,
       timestamp: eventTimestamp,
       location: coords,
-      status: 'OPEN'
+      status: 'OPEN',
+      severity: severity || 'UNKNOWN',
+      severityScore: severityScore || null,
+      severityMetrics: severityMetrics || null
     };
 
     console.log('[Backend] Storing event with payload:', payload);
@@ -74,7 +95,9 @@ router.post('/', async (req, res) => {
       userName: userName || userId,
       emergencyEmail,
       timestamp: eventTimestamp, 
-      location: coords 
+      location: coords,
+      severity: severity || null,
+      severityMetrics: severityMetrics || null
     }).catch((err) =>
       console.error('[Backend] Failed to send email:', err.message)
     );

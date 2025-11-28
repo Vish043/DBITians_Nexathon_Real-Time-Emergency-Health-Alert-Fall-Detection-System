@@ -17,6 +17,7 @@ export default function EventsTable({ events, onDelete }) {
           <th>User</th>
           <th>Name</th>
           <th>Type</th>
+          <th>Severity</th>
           <th>Status</th>
           <th>Location</th>
           <th>Actions</th>
@@ -29,6 +30,11 @@ export default function EventsTable({ events, onDelete }) {
             <td>{event.userId}</td>
             <td>{event.userName || '—'}</td>
             <td>{event.type}</td>
+            <td>
+              <span className={`severity-pill severity-${event.severity?.toLowerCase() || 'unknown'}`}>
+                {event.severity || 'UNKNOWN'}
+              </span>
+            </td>
             <td>
               <span className={`status-pill ${event.status}`}>{event.status}</span>
             </td>

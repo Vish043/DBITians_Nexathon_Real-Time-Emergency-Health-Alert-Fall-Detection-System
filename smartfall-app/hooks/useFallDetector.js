@@ -14,6 +14,15 @@ const STILLNESS_GRAVITY_TOLERANCE = 0.25;
 const GYRO_THRESHOLD = 5;
 const DEMO_USER_ID = 'demo-user-1';
 
+// Severity thresholds
+const SEVERITY_LOW_MAX_ACCEL = 30; // m/s²
+const SEVERITY_MEDIUM_MAX_ACCEL = 50; // m/s²
+const SEVERITY_LOW_MAX_ROTATION = 10; // rad/s
+const SEVERITY_MEDIUM_MAX_ROTATION = 20; // rad/s
+const SEVERITY_MIN_STILL_TIME = 1000; // ms
+const SEVERITY_MEDIUM_STILL_TIME = 2000; // ms
+const PRESSURE_CHANGE_PER_METER = 0.12; // hPa per meter (approximate)
+
 const STORAGE_KEYS = {
   USER_NAME: '@smartfall:userName',
   EMERGENCY_EMAIL: '@smartfall:emergencyEmail'
@@ -28,6 +37,7 @@ export const CLASSIFICATIONS = {
 export const useFallDetector = () => {
   const [acceleration, setAcceleration] = useState({ x: 0, y: 0, z: 0 });
   const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
+  const [pressure, setPressure] = useState(null);
   const [fallScore, setFallScore] = useState(0);
   const [classification, setClassification] = useState('NORMAL');
   const [countdown, setCountdown] = useState(null);
@@ -41,10 +51,16 @@ export const useFallDetector = () => {
     stillness: false
   });
   const [userProfile, setUserProfile] = useState({ userName: '', emergencyEmail: '' });
+  const [severity, setSeverity] = useState(null);
 
   const magnitudeWindowRef = useRef([]);
   const confirmFallRef = useRef(null);
   const prevClassificationRef = useRef('NORMAL');
+  const fallDetectedAtRef = useRef(null);
+  const pressureBeforeFallRef = useRef(null);
+  const maxRotationRef = useRef(0);
+  const maxAccelerationRef = useRef(0);
+  const stillnessStartTimeRef = useRef(null);
 
   const accelerationMagnitude = useMemo(() => {
     const { x, y, z } = acceleration;
@@ -84,7 +100,14 @@ export const useFallDetector = () => {
       unsubscribe = subscribeSensors({
         interval: SAMPLE_INTERVAL_MS,
         onAcceleration: setAcceleration,
-        onRotation: setRotation
+        onRotation: setRotation,
+        onPressure: (data) => {
+          setPressure(data.pressure);
+          // Store pressure before fall is detected
+          if (fallDetectedAtRef.current === null && data.pressure) {
+            pressureBeforeFallRef.current = data.pressure;
+          }
+        }
       });
       console.log('useFallDetector: Sensors initialized successfully');
     } catch (err) {
@@ -113,6 +136,25 @@ export const useFallDetector = () => {
       variance < STILLNESS_VAR_THRESHOLD &&
       Math.abs(mean - 1) < STILLNESS_GRAVITY_TOLERANCE;
 
+    // Track max values for severity calculation
+    if (maxA > maxAccelerationRef.current) {
+      maxAccelerationRef.current = maxA;
+    }
+    if (gyroMagnitude > maxRotationRef.current) {
+      maxRotationRef.current = gyroMagnitude;
+    }
+
+    // Track stillness time after fall detection
+    if (fallDetectedAtRef.current !== null) {
+      if (stillness) {
+        if (stillnessStartTimeRef.current === null) {
+          stillnessStartTimeRef.current = now;
+        }
+      } else {
+        stillnessStartTimeRef.current = null;
+      }
+    }
+
     let score = 0;
     if (maxA > IMPACT_THRESHOLD_MS2) score += 2;
     if (stillness) score += 2;
@@ -127,16 +169,120 @@ export const useFallDetector = () => {
 
   useEffect(() => {
     if (classification === 'FALL' && prevClassificationRef.current !== 'FALL' && countdown === null) {
+      // Fall just detected - reset tracking variables
+      fallDetectedAtRef.current = Date.now();
+      maxAccelerationRef.current = 0;
+      maxRotationRef.current = 0;
+      stillnessStartTimeRef.current = null;
       setStatus('Possible fall detected');
       setCountdown(COUNTDOWN_SECONDS);
     }
     prevClassificationRef.current = classification;
   }, [classification, countdown]);
 
+  // Calculate severity based on physics-based analysis
+  const calculateSeverity = useCallback(() => {
+    const now = Date.now();
+    const accelerationPeak = maxAccelerationRef.current; // m/s²
+    const rotationAngle = maxRotationRef.current; // rad/s (approximate)
+    
+    // Calculate time still after fall
+    const timeStill = stillnessStartTimeRef.current 
+      ? now - stillnessStartTimeRef.current 
+      : 0;
+    
+    // Calculate height estimate from barometer (if available)
+    let heightEstimate = null;
+    // Access current pressure from state (will be captured when function is called)
+    const currentPressure = pressure;
+    if (pressureBeforeFallRef.current && currentPressure) {
+      const pressureChange = pressureBeforeFallRef.current - currentPressure;
+      // Positive pressure change means we went down (higher pressure at lower altitude)
+      if (pressureChange > 0) {
+        heightEstimate = (pressureChange / PRESSURE_CHANGE_PER_METER); // meters
+      }
+    }
+
+    console.log('[Severity] Metrics:', {
+      accelerationPeak,
+      rotationAngle,
+      timeStill,
+      heightEstimate
+    });
+
+    // Severity scoring
+    let severityScore = 0;
+    
+    // Acceleration peak contribution (0-3 points)
+    if (accelerationPeak >= SEVERITY_MEDIUM_MAX_ACCEL) {
+      severityScore += 3; // High impact
+    } else if (accelerationPeak >= SEVERITY_LOW_MAX_ACCEL) {
+      severityScore += 2; // Medium impact
+    } else if (accelerationPeak > IMPACT_THRESHOLD_MS2) {
+      severityScore += 1; // Low impact
+    }
+
+    // Rotation angle contribution (0-2 points)
+    if (rotationAngle >= SEVERITY_MEDIUM_MAX_ROTATION) {
+      severityScore += 2; // High rotation
+    } else if (rotationAngle >= SEVERITY_LOW_MAX_ROTATION) {
+      severityScore += 1; // Medium rotation
+    }
+
+    // Time still contribution (0-2 points)
+    if (timeStill >= SEVERITY_MEDIUM_STILL_TIME) {
+      severityScore += 2; // Long stillness (likely serious)
+    } else if (timeStill >= SEVERITY_MIN_STILL_TIME) {
+      severityScore += 1; // Medium stillness
+    }
+
+    // Height estimate contribution (0-2 points, if available)
+    if (heightEstimate !== null) {
+      if (heightEstimate >= 1.5) {
+        severityScore += 2; // High fall (>1.5m)
+      } else if (heightEstimate >= 0.5) {
+        severityScore += 1; // Medium fall (0.5-1.5m)
+      }
+    }
+
+    // Determine severity level
+    let severityLevel = 'LOW';
+    if (severityScore >= 6) {
+      severityLevel = 'HIGH';
+    } else if (severityScore >= 3) {
+      // Special case: If impact >50 m/s² but score is only 3, classify as LOW
+      if (accelerationPeak > 50 && severityScore === 3) {
+        severityLevel = 'LOW';
+      } else {
+        severityLevel = 'MEDIUM';
+      }
+    }
+
+    const severityData = {
+      level: severityLevel,
+      score: severityScore,
+      metrics: {
+        accelerationPeak: Math.round(accelerationPeak * 10) / 10,
+        rotationAngle: Math.round(rotationAngle * 10) / 10,
+        timeStill: Math.round(timeStill),
+        heightEstimate: heightEstimate !== null ? Math.round(heightEstimate * 100) / 100 : null
+      }
+    };
+
+    console.log('[Severity] Calculated:', severityData);
+    return severityData;
+  }, [pressure]);
+
   const cancelAlert = useCallback(() => {
     setCountdown(null);
     setStatus('Monitoring');
     setError(null);
+    // Reset fall tracking when cancelled
+    fallDetectedAtRef.current = null;
+    maxAccelerationRef.current = 0;
+    maxRotationRef.current = 0;
+    stillnessStartTimeRef.current = null;
+    pressureBeforeFallRef.current = null;
   }, []);
 
   const confirmFall = useCallback(async () => {
@@ -177,12 +323,19 @@ export const useFallDetector = () => {
       
       console.log('[Hook] Using profile for sending:', currentProfile);
       
+      // Calculate severity before sending
+      const severityData = calculateSeverity();
+      setSeverity(severityData);
+      
       // Prepare payload - only include fields if they have values
       const payload = {
         userId,
         type: 'FALL',
         location: coords,
-        timestamp
+        timestamp,
+        severity: severityData.level,
+        severityScore: severityData.score,
+        severityMetrics: severityData.metrics
       };
       
       // Only add userName and emergencyEmail if they exist and are not empty
@@ -203,9 +356,16 @@ export const useFallDetector = () => {
         throw new Error(response?.data?.message ?? 'Failed to send alert');
       }
 
-      setLastEvent({ id: response.data.eventId, timestamp, location: coords });
+      setLastEvent({ id: response.data.eventId, timestamp, location: coords, severity: severityData });
       setStatus('Alert sent ✅');
       setError(null); // Clear any previous errors
+      
+      // Reset fall tracking after successful send
+      fallDetectedAtRef.current = null;
+      maxAccelerationRef.current = 0;
+      maxRotationRef.current = 0;
+      stillnessStartTimeRef.current = null;
+      pressureBeforeFallRef.current = null;
     } catch (err) {
       console.error('Error sending fall event:', err);
       console.error('Error details:', {
@@ -269,7 +429,8 @@ export const useFallDetector = () => {
     windowStats,
     cancelAlert,
     userProfile,
-    updateUserProfile
+    updateUserProfile,
+    severity
   };
 };
 

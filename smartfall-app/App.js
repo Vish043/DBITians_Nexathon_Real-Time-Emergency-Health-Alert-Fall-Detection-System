@@ -20,7 +20,8 @@ function App() {
     lastEvent,
     cancelAlert,
     userProfile,
-    updateUserProfile
+    updateUserProfile,
+    severity
   } = useFallDetector();
 
   return (
@@ -65,10 +66,29 @@ function App() {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
+        {severity && (
+          <View style={styles.severityCard}>
+            <Text style={styles.severityTitle}>Severity: {severity.level}</Text>
+            <Text style={styles.severityText}>
+              Score: {severity.score} | Impact: {severity.metrics.accelerationPeak} m/s²
+            </Text>
+            {severity.metrics.heightEstimate && (
+              <Text style={styles.severityText}>
+                Height: {severity.metrics.heightEstimate}m
+              </Text>
+            )}
+          </View>
+        )}
+
         {lastEvent && (
           <View style={styles.eventCard}>
             <Text style={styles.eventTitle}>Last alert</Text>
             <Text style={styles.eventText}>{new Date(lastEvent.timestamp).toLocaleString()}</Text>
+            {lastEvent.severity && (
+              <Text style={styles.eventText}>
+                Severity: {lastEvent.severity.level} (Score: {lastEvent.severity.score})
+              </Text>
+            )}
             {lastEvent.location?.lat && (
               <Text style={styles.eventText}>
                 {lastEvent.location.lat.toFixed(4)}, {lastEvent.location.lng.toFixed(4)}
@@ -251,5 +271,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
     textAlign: 'center'
+  },
+  severityCard: {
+    backgroundColor: '#0f172a',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 20
+  },
+  severityTitle: {
+    color: '#f1f5f9',
+    fontWeight: '600',
+    marginBottom: 6,
+    fontSize: 16
+  },
+  severityText: {
+    color: '#cbd5f5',
+    fontSize: 13,
+    marginTop: 4
   }
 });

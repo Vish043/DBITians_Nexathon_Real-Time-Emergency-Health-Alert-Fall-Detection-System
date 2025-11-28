@@ -118,3 +118,32 @@ body {
   transform: scale(0.95);
 }
 
+.severity-pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-pill.severity-low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.severity-pill.severity-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.severity-pill.severity-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.severity-pill.severity-unknown {
+  background: #e2e8f0;
+  color: #475569;
+}
+
