@@ -9,3 +9,5 @@ export const api = axios.create({
 
 export const fetchEvents = () => api.get('/api/events');
 
+export const deleteEvent = (eventId) => api.delete(`/api/events/${eventId}`);
+

@@ -4,13 +4,25 @@ import axios from 'axios';
 // Options: http://192.168.14.65:4000 (Wi-Fi) or http://192.168.10.210:4000 (Ethernet)
 // For Android emulator, use http://10.0.2.2:4000
 // For iOS simulator, use http://localhost:4000
-const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://192.168.14.65:4000';
+
+// Use environment variable if set, otherwise use correct Wi-Fi IP
+let API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.14.65:4000';
+
+// Fix incorrect IP if set to old/wrong value
+if (API_BASE.includes('192.168.0.42')) {
+  API_BASE = 'http://192.168.14.65:4000';
+  console.warn('⚠️  Fixed incorrect API URL to:', API_BASE);
+}
 
 console.log('API Base URL:', API_BASE);
 
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 7000
+  timeout: 15000, // Increased timeout to 15 seconds
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 });
 
 // Add error interceptor to log network errors

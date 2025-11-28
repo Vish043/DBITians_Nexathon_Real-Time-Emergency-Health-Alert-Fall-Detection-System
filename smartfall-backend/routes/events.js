@@ -50,14 +50,33 @@ router.post('/', async (req, res) => {
 
     await firestore.collection('events').doc(id).set(payload);
 
+    // Send response immediately, then send email asynchronously
+    res.status(201).json({ success: true, eventId: id });
+
+    // Send email in background (non-blocking)
     sendAlertEmail({ userId, timestamp: eventTimestamp, location: coords }).catch((err) =>
       console.error('Failed to send email', err.message)
     );
-
-    res.status(201).json({ success: true, eventId: id });
   } catch (err) {
     console.error('POST /api/events error', err);
     res.status(500).json({ success: false, message: 'Failed to store event' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Event ID is required' });
+    }
+
+    await firestore.collection('events').doc(id).delete();
+
+    res.json({ success: true, message: 'Event deleted successfully' });
+  } catch (err) {
+    console.error('DELETE /api/events/:id error', err);
+    res.status(500).json({ success: false, message: 'Failed to delete event' });
   }
 });
 

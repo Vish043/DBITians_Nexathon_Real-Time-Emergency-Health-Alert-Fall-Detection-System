@@ -127,28 +127,47 @@ export const useFallDetector = () => {
       }
 
       const timestamp = new Date().toISOString();
-      const { data } = await sendFallEvent({
+      console.log('Sending fall event to backend...', { userId: DEMO_USER_ID, type: 'FALL', location: coords });
+      
+      const response = await sendFallEvent({
         userId: DEMO_USER_ID,
         type: 'FALL',
         location: coords,
         timestamp
       });
 
-      if (!data?.success) {
-        throw new Error(data?.message ?? 'Failed to send alert');
+      console.log('Backend response:', response.data);
+
+      if (!response?.data?.success) {
+        throw new Error(response?.data?.message ?? 'Failed to send alert');
       }
 
-      setLastEvent({ id: data.eventId, timestamp, location: coords });
+      setLastEvent({ id: response.data.eventId, timestamp, location: coords });
       setStatus('Alert sent ✅');
+      setError(null); // Clear any previous errors
     } catch (err) {
       console.error('Error sending fall event:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to send alert';
-      setError(errorMessage);
-      setStatus('Failed to send alert');
+      console.error('Error details:', {
+        message: err.message,
+        code: err.code,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       
-      // If it's a network error, provide helpful message
-      if (err.code === 'NETWORK_ERROR' || err.message === 'Network Error') {
-        setError('Cannot reach backend. Check if backend is running and EXPO_PUBLIC_API_URL is set correctly.');
+      // Check if the request actually succeeded (data might be in Firestore even if response failed)
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to send alert';
+      
+      // If we got a response but it's an error, show that
+      if (err.response) {
+        setError(errorMessage);
+        setStatus('Failed to send alert');
+      } else if (err.code === 'NETWORK_ERROR' || err.message === 'Network Error' || err.code === 'ECONNABORTED') {
+        // Network error - but data might have reached backend anyway
+        setError('Network timeout - but alert may have been sent. Check dashboard.');
+        setStatus('Sending... (check dashboard)');
+      } else {
+        setError(errorMessage);
+        setStatus('Failed to send alert');
       }
     }
   }, []);
