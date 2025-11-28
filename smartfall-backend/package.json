@@ -2,21 +2,20 @@
   "name": "smartfall-backend",
   "version": "0.1.0",
   "description": "SmartFall backend API for fall event ingestion, storage, and alerting.",
-  "main": "src/index.js",
+  "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
+    "dev": "node --watch index.js",
+    "start": "node index.js",
     "lint": "echo \"No lint configured\""
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "firebase-admin": "^12.2.0",
     "nanoid": "^5.0.7",
-    "nodemailer": "^6.9.13",
-    "sqlite": "^5.1.6",
-    "sqlite3": "^5.1.7"
+    "nodemailer": "^6.9.13"
   }
 }
 
