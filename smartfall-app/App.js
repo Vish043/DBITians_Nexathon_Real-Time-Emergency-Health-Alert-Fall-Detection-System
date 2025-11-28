@@ -1,9 +1,12 @@
+import { registerRootComponent } from 'expo';
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFallDetector } from './hooks/useFallDetector';
 
-export default function App() {
+console.log('SmartFall App mounting');
+
+function App() {
   const {
     rotation,
     fallScore,
@@ -25,6 +28,7 @@ export default function App() {
           {classificationMeta.label}
         </Text>
         <Text style={styles.status}>{status}</Text>
+
         <View style={styles.metricsRow}>
           <View style={styles.metricBlock}>
             <Text style={styles.metricLabel}>Score</Text>
@@ -35,6 +39,7 @@ export default function App() {
             <Text style={styles.metricValue}>{windowStats.maxA.toFixed(1)} m/s²</Text>
           </View>
         </View>
+
         <Text style={styles.subtitle}>
           Mean A: {windowStats.mean.toFixed(2)}g · Var: {windowStats.variance.toFixed(3)} · Still:{' '}
           {windowStats.stillness ? 'Yes' : 'No'}
@@ -42,7 +47,9 @@ export default function App() {
         <Text style={styles.subtitle}>
           Gyro: {rotation.x.toFixed(2)}, {rotation.y.toFixed(2)}, {rotation.z.toFixed(2)}
         </Text>
+
         {error && <Text style={styles.error}>{error}</Text>}
+
         {lastEvent && (
           <View style={styles.eventCard}>
             <Text style={styles.eventTitle}>Last alert</Text>
@@ -63,7 +70,7 @@ export default function App() {
             <Text style={styles.modalSubtitle}>Sending alert in 10 seconds…</Text>
             <Text style={styles.countdown}>{countdown}</Text>
             <TouchableOpacity style={styles.cancelButton} onPress={cancelAlert}>
-              <Text style={styles.cancelText}>I’m OK (Cancel)</Text>
+              <Text style={styles.cancelText}>I'm OK (Cancel)</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -71,6 +78,11 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
+export default App;
+
+// Register with Expo
+registerRootComponent(App);
 
 const styles = StyleSheet.create({
   container: {
@@ -200,4 +212,3 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   }
 });
-

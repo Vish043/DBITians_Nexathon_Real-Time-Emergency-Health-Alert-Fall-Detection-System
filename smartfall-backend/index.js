@@ -5,7 +5,11 @@ import eventRoutes from './routes/events.js';
 
 const app = express();
 
-app.use(cors({ origin: env.dashboardOrigin, credentials: true }));
+// CORS configuration - allow all origins for development (mobile app + dashboard)
+app.use(cors({ 
+  origin: true, // Allow all origins for development
+  credentials: true 
+}));
 app.use(express.json());
 
 app.get('/', (_req, res) => {

@@ -50,11 +50,19 @@ export const useFallDetector = () => {
   }, [rotation]);
 
   useEffect(() => {
-    const unsubscribe = subscribeSensors({
-      interval: SAMPLE_INTERVAL_MS,
-      onAcceleration: setAcceleration,
-      onRotation: setRotation
-    });
+    console.log('useFallDetector: Initializing sensors...');
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = subscribeSensors({
+        interval: SAMPLE_INTERVAL_MS,
+        onAcceleration: setAcceleration,
+        onRotation: setRotation
+      });
+      console.log('useFallDetector: Sensors initialized successfully');
+    } catch (err) {
+      console.error('Failed to initialize sensors:', err);
+      setError('Failed to initialize sensors. Please restart the app.');
+    }
     return unsubscribe;
   }, []);
 
@@ -133,9 +141,15 @@ export const useFallDetector = () => {
       setLastEvent({ id: data.eventId, timestamp, location: coords });
       setStatus('Alert sent ✅');
     } catch (err) {
-      console.error(err);
-      setError(err.message);
+      console.error('Error sending fall event:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to send alert';
+      setError(errorMessage);
       setStatus('Failed to send alert');
+      
+      // If it's a network error, provide helpful message
+      if (err.code === 'NETWORK_ERROR' || err.message === 'Network Error') {
+        setError('Cannot reach backend. Check if backend is running and EXPO_PUBLIC_API_URL is set correctly.');
+      }
     }
   }, []);
 
@@ -156,11 +170,13 @@ export const useFallDetector = () => {
     return () => clearTimeout(timer);
   }, [countdown]);
 
+  const classificationMeta = CLASSIFICATIONS[classification] || CLASSIFICATIONS.NORMAL;
+
   return {
     rotation,
     fallScore,
     classification,
-    classificationMeta: CLASSIFICATIONS[classification],
+    classificationMeta,
     countdown,
     status,
     error,
