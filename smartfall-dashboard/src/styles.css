@@ -65,6 +65,15 @@ body {
   color: #0f172a;
 }
 
+.table-row-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.table-row-clickable:hover {
+  background-color: #f8fafc;
+}
+
 .status-pill {
   display: inline-flex;
   padding: 4px 10px;
@@ -79,6 +88,28 @@ body {
 .status-pill.alerted {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.status-select {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: white;
+  color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.status-select:hover {
+  border-color: #2563eb;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
 .map-link {

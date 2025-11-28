@@ -107,6 +107,31 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Event ID is required' });
+    }
+
+    if (!status || !['OPEN', 'RESOLVED', 'INVESTIGATING'].includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid status is required (OPEN, RESOLVED, INVESTIGATING)' 
+      });
+    }
+
+    await firestore.collection('events').doc(id).update({ status });
+
+    res.json({ success: true, message: 'Event status updated successfully' });
+  } catch (err) {
+    console.error('PATCH /api/events/:id error', err);
+    res.status(500).json({ success: false, message: 'Failed to update event status' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;

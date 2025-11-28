@@ -11,3 +11,6 @@ export const fetchEvents = () => api.get('/api/events');
 
 export const deleteEvent = (eventId) => api.delete(`/api/events/${eventId}`);
 
+export const updateEventStatus = (eventId, status) => 
+  api.patch(`/api/events/${eventId}`, { status });
+
